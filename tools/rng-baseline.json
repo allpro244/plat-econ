@@ -1,0 +1,6 @@
+{
+  "sim.ts": { "rng": 4, "rrange": 9 },
+  "market.ts": { "rng": 23, "rrange": 37 },
+  "rivals.ts": { "rng": 34, "rrange": 27 },
+  "dev.ts": { "rng": 29, "rrange": 8 }
+}
