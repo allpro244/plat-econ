@@ -1,0 +1,27 @@
+name: gate
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  gate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Install
+        run: pnpm install --frozen-lockfile
+      - name: Bundle the engine
+        run: pnpm engine
+      - name: Gate (conserve + extleak + city-accept + invariants)
+        # The same four harnesses `pnpm gate` runs locally — the engine's
+        # definition of green. No renderer, no UI, no GPU: the sim must
+        # pass with the renderer deleted, and here there is no renderer.
+        run: pnpm gate
