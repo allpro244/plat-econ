@@ -3,3 +3,4 @@ test/.engine.mjs
 test/.entry.ts
 *.log
 dist/
+campaign/
