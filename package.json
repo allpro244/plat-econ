@@ -71,7 +71,8 @@
     "baseline": "node tools/baseline.mjs",
     "baseline:check": "node tools/baseline.mjs --check",
     "tape": "node test/tape.mjs",
-    "liquidity": "node test/liquidity.mjs"
+    "liquidity": "node test/liquidity.mjs",
+    "export": "node tools/export-city.mjs"
   },
   "dependencies": {},
   "devDependencies": {
