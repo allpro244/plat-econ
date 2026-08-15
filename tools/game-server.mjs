@@ -21,11 +21,11 @@ import { buildCityDoc, hudOf } from "./citydoc.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const bundle = join(HERE, "..", "test", ".engine.mjs");
-if (!existsSync(bundle)) {
+if (!globalThis.__PLAT_ENGINE && !existsSync(bundle)) {
   console.error("no engine bundle — run `pnpm engine` first");
   process.exit(1);
 }
-const E = await import(bundle);
+const E = globalThis.__PLAT_ENGINE ?? await import(bundle);
 
 const cmd = process.argv[2];
 const arg = (name, dflt) => {
@@ -42,6 +42,10 @@ function buildParcels(meta) {
 
 function writeAll(meta, city, g) {
   writeFileSync(join(dir, "state.json"), JSON.stringify(g));
+  // A century is long and mistakes are permanent: every write keeps a
+  // dated snapshot too (docs/GAME-PLAN.md phase 5).
+  mkdirSync(join(dir, "saves"), { recursive: true });
+  writeFileSync(join(dir, "saves", `m${String(g.month).padStart(4, "0")}.json`), JSON.stringify(g));
   writeFileSync(join(dir, "city.json"),
     JSON.stringify(buildCityDoc(E, city, g, { months: g.month })));
   const hud = hudOf(E, city, g);
@@ -75,7 +79,71 @@ if (cmd === "new") {
     g = E.advanceMonth(g, city.parcels, bbls, city.adjacency);
   }
   writeAll(meta, city, g);
+} else if (cmd === "buy") {
+  // BUY AT ASK (docs/GAME-PLAN.md phase 3.2): the canonical price rule,
+  // then the engine's purchase path decides. The engine's err string is
+  // the whole result contract — plat shows it verbatim.
+  const meta = JSON.parse(readFileSync(join(dir, "campaign.json"), "utf8"));
+  const bbl = arg("bbl", "");
+  const city = buildParcels(meta);
+  const bbls = Object.keys(city.parcels);
+  let g = JSON.parse(readFileSync(join(dir, "state.json"), "utf8"));
+  const li = (g.listings ?? []).find((l) => l.bbl === bbl);
+  const approach = g.approaches?.[bbl];
+  const rec = E.resolveRec(city.parcels, g, bbl);
+  const price = li?.ask ?? approach?.ask ??
+    (rec ? (rec.class === "land" ? E.landValue(rec, g.econ)
+          : E.assetValue(rec, g.econ, E.gradeOf(g, rec))) : 0);
+  const r = E.executePurchase(g, city.parcels, bbl, price, "cash", !li, 1);
+  const result = { op: "buy", bbl, price: Math.round(price), ok: !r.err, err: r.err ?? null };
+  writeFileSync(join(dir, "result.json"), JSON.stringify(result));
+  if (r.err) {
+    console.error("BUY FAILED: " + r.err);
+    writeAll(meta, city, g);
+    process.exit(2);
+  }
+  g = r.s;
+  writeAll(meta, city, g);
+  console.log(`BOUGHT ${bbl} for $${(price / 1e6).toFixed(2)}M`);
+} else if (cmd === "develop-options") {
+  // What pencils on this lot: the engine underwrites candidate designs.
+  const meta = JSON.parse(readFileSync(join(dir, "campaign.json"), "utf8"));
+  const bbl = arg("bbl", "");
+  const city = buildParcels(meta);
+  const g = JSON.parse(readFileSync(join(dir, "state.json"), "utf8"));
+  const options = [];
+  for (const use of ["office", "multifamily", "retail", "industrial"]) {
+    for (const floors of [3, 6, 10, 16, 24]) {
+      try {
+        const uw = E.underwriteDevelopment(g, city.parcels, bbl, use, floors);
+        if (uw?.plan) options.push({
+          use, floors, sf: Math.round(uw.plan.sf), cost: Math.round(uw.plan.costTotal),
+          clears: !!uw.clears, financeable: !!uw.financeable, why: uw.why ?? null,
+        });
+      } catch { /* infeasible */ }
+    }
+  }
+  writeFileSync(join(dir, "options.json"), JSON.stringify({ bbl, options }));
+  console.log(`${options.length} designs underwritten for ${bbl} -> options.json`);
+} else if (cmd === "develop") {
+  const meta = JSON.parse(readFileSync(join(dir, "campaign.json"), "utf8"));
+  const bbl = arg("bbl", "");
+  const use = arg("use", "multifamily");
+  const floors = parseInt(arg("floors", "6"), 10) || 6;
+  const city = buildParcels(meta);
+  let g = JSON.parse(readFileSync(join(dir, "state.json"), "utf8"));
+  const r = E.startDevelopment(g, city.parcels, bbl, use, floors);
+  const result = { op: "develop", bbl, use, floors, ok: !r.err, err: r.err ?? null };
+  writeFileSync(join(dir, "result.json"), JSON.stringify(result));
+  if (r.err) {
+    console.error("DEVELOP FAILED: " + r.err);
+    writeAll(meta, city, g);
+    process.exit(2);
+  }
+  g = r.s;
+  writeAll(meta, city, g);
+  console.log(`DEVELOPING ${bbl}: ${floors}-floor ${use}`);
 } else {
-  console.error("usage: game-server.mjs new|advance --dir=D [--seed --size --density --months]");
+  console.error("usage: game-server.mjs new|advance|buy|develop-options|develop --dir=D [--seed --size --density --months --bbl --use --floors]");
   process.exit(1);
 }

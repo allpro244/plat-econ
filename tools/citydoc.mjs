@@ -11,9 +11,26 @@ export function buildCityDoc(E, city, g, extra = {}) {
       occ = +(h ? E.physicalOcc(rec, h) : E.occupancy(rec, g.econ)).toFixed(3);
       if (h?.condIdx != null) cond = +h.condIdx.toFixed(3);
     }
+    // THE MONEY LINES (docs/GAME-PLAN.md phase 3.1): appraisal by the
+    // engine's own assetValue, asking price by the canonical rule the
+    // acquisition desk uses (listing ask, else off-market approach ask,
+    // else nothing — an unlisted parcel has no ask).
+    let value = null, ask = null, listed = 0, distress = 0;
+    if (rec && rec.class !== "land") {
+      try { value = Math.round(E.assetValue(rec, g.econ, E.gradeOf(g, rec))); } catch { /* no read */ }
+    } else if (rec) {
+      try { value = Math.round(E.landValue(rec, g.econ)); } catch { /* no read */ }
+    }
+    const li = (g.listings ?? []).find((l) => l.bbl === bbl);
+    if (li) { ask = Math.round(li.ask); listed = 1; distress = li.distress ? 1 : 0; }
+    else if (g.approaches?.[bbl]?.ask) ask = Math.round(g.approaches[bbl].ask);
     parcels[bbl] = {
       occ,
       ...(cond != null ? { cond } : {}),
+      ...(value != null ? { value } : {}),
+      ...(ask != null ? { ask } : {}),
+      ...(listed ? { listed: 1 } : {}),
+      ...(distress ? { distress: 1 } : {}),
       // The player's deeds, marked: the renderer may celebrate them.
       ...(g.holdings[bbl] ? { held: 1 } : {}),
       class: p.class,
@@ -69,5 +86,8 @@ export function hudOf(E, city, g) {
     heldSf: Math.round(heldSf),
     occ: occN ? +(occSum / occN).toFixed(3) : null,
     baseRate: g.econ?.baseRateBps != null ? g.econ.baseRateBps / 100 : null,
+    listings: (g.listings ?? []).length,
+    // The inbox: what the engine says needs a decision.
+    attention: (() => { try { return E.attentionItems(g).map((a) => a.label).slice(0, 6); } catch { return []; } })(),
   };
 }
