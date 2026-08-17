@@ -836,7 +836,11 @@ export function islandConfig(seed) {
    * that never had a surveyor at all. That was the specific complaint: every
    * city had exactly one irregular blob and grid everywhere else.
    */
-  const organicTown = Dpl.chance(0.11);
+  // A whole town with no surveyor anywhere is one city in twenty-five, not
+  // one in nine — at 0.11 the owner kept opening tangles and asking why
+  // nothing looked like a normal city. The organic OLD QUARTER survives
+  // per-district below; this dial is only "organic nearly throughout".
+  const organicTown = Dpl.chance(0.04);
   /**
    * A RADIAL PLAN AND A SUPERBLOCK ESTATE ARE EACH ALLOWED ONCE.
    *
@@ -914,7 +918,7 @@ export function islandConfig(seed) {
     const r = Dpl.rand();
     switch (role) {
       case "old":                                        // the landing
-        return (r < 0.50 ? "organic" : r < 0.70 ? "lattice" : r < 0.86 ? once("radial") : once("chamfer")) ?? "lattice";
+        return (r < 0.30 ? "organic" : r < 0.80 ? "lattice" : r < 0.90 ? once("radial") : once("chamfer")) ?? "lattice";
       case "core":
         // THE EXCHANGE CANNOT BE A SUPERBLOCK ESTATE, and that is a fact about
         // the world rather than a budget. Slab estates went up on cleared
@@ -924,13 +928,19 @@ export function islandConfig(seed) {
         // island — measured, the core takes 32-51% of a banded island and up to
         // 60% of a ringed one — so letting it draw the kind that carries half
         // the parcels per hectare put seed 555 at 786 lots against about 1,400.
-        return (r < 0.52 ? "lattice" : r < 0.68 ? once("radial") : r < 0.84 ? once("chamfer")
-          : "organic") ?? "lattice";
+        // A downtown is a GRID four times in five. Radial and chamfered
+        // stay as the rare civic statement; an organic Exchange survives
+        // only through the old-quarter roll or an organicTown. Measured
+        // motivation: at lattice 0.52 most seeds read "tangle with one
+        // gridded corner" from altitude — backwards from every real port.
+        return (r < 0.80 ? "lattice" : r < 0.90 ? once("radial") : once("chamfer")) ?? "lattice";
       case "ind":                                        // the yards
-        return (r < 0.62 ? "lattice" : r < 0.86 ? once("superblock") : "organic") ?? "lattice";
+        return (r < 0.80 ? "lattice" : once("superblock")) ?? "lattice";
       default:                                           // the housing
-        return (r < 0.32 ? "lattice" : r < 0.58 ? "curvi" : r < 0.70 ? once("chamfer")
-          : r < 0.84 ? once("superblock") : "organic") ?? "curvi";
+        // Housing fabric is surveyed fabric: grid first, one streetcar
+        // suburb of bent streets as the accent, estates and old lanes rare.
+        return (r < 0.60 ? "lattice" : r < 0.80 ? "curvi" : r < 0.88 ? once("chamfer")
+          : r < 0.96 ? once("superblock") : "organic") ?? "curvi";
     }
   };
 
@@ -1466,7 +1476,12 @@ export function islandConfig(seed) {
         ...base, kind: "lattice",
         stPitch, avePitch,
         streetW: streetWOf(stPitch), aveW: aveWOf(avePitch),
-        warpAmp: Math.round(sv.warp),
+        // A surveyed grid is STRAIGHT — that is what the surveyor was for.
+        // The full survey warp (1-9 m of node displacement) belonged to the
+        // curvi kind; on lattice it bent every "grid" enough to read as
+        // wobble from altitude, which the owner named directly. A metre or
+        // two of setting-out error is all a real grid carries.
+        warpAmp: Math.min(2, Math.round(sv.warp * 0.25)),
         numbered: role === "core" || (role === "resiA" && Dg.chance(0.4)),
       };
     }
